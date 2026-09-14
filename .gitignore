@@ -1,0 +1,33 @@
+# Downloaded datasets and training artifacts
+/data/
+/checkpoints/
+/runs/
+/wandb/
+
+# Python bytecode and tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local environments and configuration
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Python build artifacts
+/build/
+/dist/
+*.egg-info/
+
+# Logs and macOS metadata
+*.log
+.DS_Store
+._*

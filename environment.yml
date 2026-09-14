@@ -1,0 +1,25 @@
+name: dl
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+      - numpy
+      - scipy
+      - pandas
+      - scikit-learn
+      - torch
+      - torchvision
+      - torchaudio
+      - matplotlib
+      - seaborn
+      - jupyterlab
+      - ipykernel
+      - tqdm
+      - pillow
+      - tensorboard
+      - transformers
+      - datasets
+      - accelerate
