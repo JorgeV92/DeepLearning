@@ -14,7 +14,7 @@ print(Xtr.shape); print(ytr.shape)
 print(Xte.shape); print(yte.shape)
 
 Xtr = Xtr.reshape(Xtr.shape[0], -1)
-Xte = Xte.reshape(Xtr.shape[0], -1)
+Xte = Xte.reshape(Xte.shape[0], -1)
 
 Xtr = Xtr.astype(np.float32)
 Xte = Xte.astype(np.float32)
@@ -33,16 +33,37 @@ class KNN:
         self.ytr = None 
 
     def fit(self, X, y):
-        pass 
+        self.Xtr = X 
+        self.ytr = y 
 
     def compute_distances(self, X):
-        pass 
+        num_test = X.shape[0]
+        num_train = self.Xtr.shape[0]
+        dists = np.zeros((num_test, num_train))
+        for i in range(num_test):
+            for j in range(num_train):
+                dists[i, j] = np.sqrt(np.sum(X[i] - self.Xtr[j])**2) 
+        return dists
 
     def pred(self, X, k=1):
-        pass 
+        dists = self.compute_distances(X)
+        return self.pred_labels(dists, k)
 
     def pred_labels(self, dist, k=1):
-        pass 
+        num_test = dist.shape[0]
+        predictions = np.zeros(num_test, dtype=int)
+        for i in range(num_test):
+            neearest_indices = np.argsort(dist[i])[:k]
+            nearest_labels = self.ytr[neearest_indices]
+            counts = np.bincount(nearest_labels)
+            predictions[i] = np.argmax(counts)
+        return predictions
+
+knn = KNN()
+knn.fit(Xtr, ytr)
+pred = knn.pred(Xte, k=5)
+accuracy = np.mean(pred == yte)
+print(f"accuracy: {accuracy:.4f}")
 
 
 
