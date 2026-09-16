@@ -1,4 +1,5 @@
-import numpy as np 
+import numpy as np
+from utils import load_cifar10
 
 def svm_loss(W, b, X, y, reg):
     N = X.shape[0]
@@ -65,3 +66,27 @@ class LinearClassifier:
     def accuracy(self, X, y):
         predictions = self.pred(X)
         return np.mean(predictions == y)
+
+
+def train_svm_cifar10(num_train=None, num_iters=1000, batch_size=256):
+    X_train, y_train, X_val, y_val, X_test, y_test = load_cifar10()
+
+    if num_train is not None:
+        X_train = X_train[:num_train]
+        y_train = y_train[:num_train]
+
+    print(X_train.shape)
+    print(y_train.shape)
+    print(X_val.shape)
+    print(X_test.shape)
+
+    svm = LinearClassifier(input_dim=3072,num_classes=10,loss_fn=svm_loss)
+    svm.train(X_train, y_train, learning_rate=1e-2, reg=1e-4, num_iters=num_iters, batch_size=batch_size)
+
+    print("SVM train accuracy:", svm.accuracy(X_train, y_train))
+    print("SVM validation accuracy:", svm.accuracy(X_val, y_val))
+    print("SVM test accuracy:", svm.accuracy(X_test, y_test))
+    return svm
+
+if __name__ == '__main__':
+    svm = train_svm_cifar10()
