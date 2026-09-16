@@ -44,11 +44,30 @@ class LinearClassifier:
         self.W = (0.001 * rng.standard_normal((input_dim, num_classes))).astype(np.float32)
         self.b = np.zeros(num_classes, dtype=np.float32)
 
-    def train(self, X, y, learning_rate=1e-2, reg=1e-4, num_iters=1000, batch_size=256):
+    def train(self, X, y, learning_rate=1e-2, reg=1e-4, num_iters=1000,
+              batch_size=256, num_epochs=None):
+        """Run SGD; num_epochs overrides num_iters to visit every image each epoch."""
         rng = np.random.default_rng(42)
         N = X.shape[0]
+        if N == 0:
+            raise ValueError("training data must contain at least one image")
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+        if num_epochs is not None:
+            if num_epochs <= 0:
+                raise ValueError("num_epochs must be positive")
+            batches_per_epoch = (N + batch_size - 1) // batch_size
+            num_iters = num_epochs * batches_per_epoch
+
         for it in range(num_iters):
-            indices = rng.choice(N, size=min(batch_size, N), replace=False)
+            if num_epochs is None:
+                indices = rng.choice(N, size=min(batch_size, N), replace=False)
+            else:
+                batch_index = it % batches_per_epoch
+                if batch_index == 0:
+                    epoch_indices = rng.permutation(N)
+                start = batch_index * batch_size
+                indices = epoch_indices[start:start + batch_size]
             X_batch = X[indices]
             y_batch = y[indices]
             loss, dW, db = self.loss_fn( self.W, self.b, X_batch, y_batch, reg)
@@ -110,6 +129,43 @@ def train_softmax_cifar10(num_train=None, num_iters=1000, batch_size=256):
     return softmax
 
 
+def train_full_cifar10(num_epochs=10, batch_size=256, learning_rate=1e-2, reg=1e-4):
+    """Train SVM and softmax on all 50,000 training images and predict test labels.
+    Returns a dict keyed by "svm" and "softmax", each containing the trained
+    model, test predictions, train accuracy, and test accuracy. The 10,000
+    test images are used only for evaluation.
+    """
+    X_train, y_train, _, _, X_test, y_test = load_cifar10(num_val=0)
+    print(f"Training images: {len(y_train)}; test images: {len(y_test)}")
+    results = {}
+    for name, loss_fn in (("svm", svm_loss), ("softmax", softmax_loss)):
+        print(f"\nTraining {name.upper()} for {num_epochs} epochs")
+        model = LinearClassifier(
+            input_dim=X_train.shape[1], num_classes=10, loss_fn=loss_fn
+        )
+        model.train(
+            X_train, y_train, learning_rate=learning_rate, reg=reg,
+            batch_size=batch_size, num_epochs=num_epochs,
+        )
+
+        predictions = model.pred(X_test)
+        train_accuracy = float(model.accuracy(X_train, y_train))
+        test_accuracy = float(np.mean(predictions == y_test))
+        results[name] = {
+            "model": model,
+            "predictions": predictions,
+            "train_accuracy": train_accuracy,
+            "test_accuracy": test_accuracy,
+        }
+        print(f"{name.upper()} train accuracy: {train_accuracy:.4f}")
+        print(f"{name.upper()} test accuracy: {test_accuracy:.4f}")
+        print(f"{name.upper()} test predictions (first 10): {predictions[:10]}")
+
+    print(f"\nActual test labels (first 10): {y_test[:10]}")
+    return results
+
+
 if __name__ == '__main__':
     # svm = train_svm_cifar10()
-    softmax = train_softmax_cifar10()
+    # softmax = train_softmax_cifar10()
+    results = train_full_cifar10()

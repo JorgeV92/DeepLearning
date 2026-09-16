@@ -1,7 +1,8 @@
 import numpy as np 
 from torchvision.datasets import CIFAR10
 
-def load_cifar10():
+def load_cifar10(num_val=1000):
+    """Load normalized CIFAR-10 data; use num_val=0 for all training images."""
     train_data = CIFAR10(root="./data",train=True,download=True)
     test_data = CIFAR10(root="./data",train=False,download=True)
 
@@ -17,11 +18,15 @@ def load_cifar10():
     X /= 255.0
     X_test /= 255.0
 
-    X_train = X[:49000]
-    y_train = y[:49000]
+    if not 0 <= num_val < X.shape[0]:
+        raise ValueError("num_val must leave at least one training image")
 
-    X_val = X[49000:]
-    y_val = y[49000:]
+    num_train = X.shape[0] - num_val
+    X_train = X[:num_train]
+    y_train = y[:num_train]
+
+    X_val = X[num_train:]
+    y_val = y[num_train:]
 
     mean_image = X_train.mean(axis=0, keepdims=True)
 
@@ -30,4 +35,3 @@ def load_cifar10():
     X_test -= mean_image
 
     return X_train, y_train, X_val, y_val, X_test, y_test
- 
