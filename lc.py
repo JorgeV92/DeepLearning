@@ -24,8 +24,7 @@ def softmax_loss(W, b, X, y, reg):
     scores -= np.max(scores, axis=1, keepdims=True) 
     exp_scores = np.exp(scores)
     probs = exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
-    corect_probs = probs[np.arange(N), y]
-    loss = -np.mean(np.log(corect_probs + 1e-12))
+    loss = np.mean(np.log(np.sum(exp_scores, axis=1)) - scores[np.arange(N), y])
     loss += reg * np.sum(W*W)
     # Gradient 
     dscores = probs.copy()
@@ -48,7 +47,7 @@ class LinearClassifier:
         rng = np.random.default_rng(42)
         N = X.shape[0]
         for it in range(num_iters):
-            indices = rng.choice(N, size=batch_size,replace=False)
+            indices = rng.choice(N, size=min(batch_size, N), replace=False)
             X_batch = X[indices]
             y_batch = y[indices]
             loss, dW, db = self.loss_fn( self.W, self.b, X_batch, y_batch, reg)
@@ -61,8 +60,8 @@ class LinearClassifier:
                     f"loss = {loss:.4f}")
     def pred(self, X):
         scores = X @ self.W + self.b 
+        return np.argmax(scores, axis=1)
 
     def accuracy(self, X, y):
         predictions = self.pred(X)
         return np.mean(predictions == y)
-
