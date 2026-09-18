@@ -2,13 +2,6 @@
 
 A list of programs in python for machine learning and deep learning.
 
-Run both linear classifiers on the full CIFAR-10 training set:
-
-```bash
-conda activate dl
-python lc.py
-```
-
 This trains separate SVM and softmax models for 10 epochs on all 50,000 training
 images, then prints accuracy and sample predictions on the separate 10,000-image
 test set. Every training image is used once per epoch. Data is downloaded to the
@@ -301,3 +294,229 @@ print(new_loss.data)        # approximately 5.76, down from 9
 The new forward pass uses the updated parameters. The original `loss.data`
 remains `9`: a `Value` records a computation at the time its graph was built.
 Repeat the forward pass, `.backward()`, and parameter updates to keep training.
+
+## Neural networks and multilayer perceptrons
+
+[`neural_networks.py`](neural_networks.py) introduces an `MLP` classifier and
+connects the previous sections: a score function, a loss, backpropagation,
+and SGD. It accompanies the
+[CS231n neural-network notes](https://cs231n.github.io/neural-networks-1/).
+
+A **neuron** computes a weighted sum, adds a bias, and applies an activation:
+
+```text
+z = w0*x0 + w1*x1 + ... + b
+activation = ReLU(z) = max(0, z)
+```
+
+A **fully connected layer** computes many neurons at once. Each neuron has
+its own weights and bias and receives every input feature. A **multilayer
+perceptron (MLP)** stacks these layers with nonlinear activations between
+them. The hidden layers learn intermediate features; the output layer
+produces class scores.
+
+### From `Value` to a layer
+
+Here is one neuron using the scalar class you already built:
+
+```python
+from backpropagation import Value
+
+w0, w1, bias = Value(0.5), Value(-1.0), Value(0.5)
+activation = (w0 * 2.0 + w1 * 1.0 + bias).relu()
+activation.backward()
+print(activation.data)       # 0.5
+print(w0.grad, w1.grad)      # 2.0, 1.0: derivatives of activation
+```
+
+For a batch of inputs and a whole layer, NumPy expresses all those weighted
+sums as `X @ W + b`. Each column of `W` contains one neuron's weights.
+`MLP` uses your existing `affine_forward`, `relu_forward`, and corresponding
+backward functions to compute this efficiently.
+
+### Start small: a network with one layer
+
+[`single_layer_network.py`](single_layer_network.py) contains a small
+`SingleLayerNetwork` class with two input features and two output neurons.
+Here, **one layer** means one trainable weight matrix and bias vector
+connecting the inputs directly to the outputs. The input itself is not
+counted as a trainable layer.
+
+```mermaid
+flowchart LR
+    X0["x0 = 2"] --> Y0["class 0 score"]
+    X1["x1 = 1"] --> Y0
+    X0 --> Y1["class 1 score"]
+    X1 --> Y1
+```
+
+The complete forward computation is:
+
+```python
+X = np.array([[2.0, 1.0]])
+W = np.array([[0.1, -0.1],
+              [0.2,  0.1]])
+b = np.zeros(2)
+
+scores = X @ W + b  # [[0.4, -0.1]]
+```
+
+Each output neuron has two weights and one bias:
+
+```text
+class 0 score = 2*0.1  + 1*0.2 + 0 =  0.4
+class 1 score = 2*(-0.1) + 1*0.1 + 0 = -0.1
+```
+
+The highest score predicts class 0. The example's correct label is class 1,
+so it uses your existing softmax cross-entropy function to compute a loss
+and gradients, then updates `W` and `b`. Softmax introduces no additional
+trainable weights. This is the same kind of linear softmax classifier you
+used earlier, shown as a minimal neural-network example.
+
+Run it to see the weights, scores, and one learning step:
+
+```bash
+conda activate dl
+python single_layer_network.py
+```
+
+With the supplied numbers, one step changes the predicted class to 1 and
+reduces the loss from approximately `0.9741` to `0.5773`. This demonstrates
+learning on one example; it does not measure performance on unseen data.
+
+### A CIFAR-10 MLP
+
+Your linear classifier computes `scores = X @ W + b`. A network with one
+hidden layer computes:
+
+```python
+hidden = np.maximum(0, X @ W1 + b1)
+scores = hidden @ W2 + b2
+```
+
+The default architecture uses 64 hidden neurons:
+
+```mermaid
+flowchart LR
+    X["3072 pixel features"] --> H["Affine: 64 hidden units"]
+    H --> R["ReLU"]
+    R --> S["Affine: 10 class scores"]
+    S --> L["Softmax cross-entropy"]
+    Y["Correct labels"] --> L
+```
+
+For a batch of `N` images, the arrays have these shapes:
+
+| Array | Shape | Meaning |
+| --- | --- | --- |
+| `X` | `(N, 3072)` | Flattened images from the existing loader |
+| `W1`, `b1` | `(3072, 64)`, `(64,)` | Input-to-hidden parameters |
+| `hidden` | `(N, 64)` | Learned activations |
+| `W2`, `b2` | `(64, 10)`, `(10,)` | Hidden-to-output parameters |
+| `scores` | `(N, 10)` | Raw class scores, also called logits |
+
+This has `3072*64 + 64 + 64*10 + 10 = 197,322` trainable parameters. We count
+the hidden and output layers, so it is a two-layer network. With
+`hidden_dims=(64, 32)`, the architecture becomes `3072 -> 64 -> 32 -> 10`:
+two hidden layers and one output layer.
+
+The output scores can be negative. ReLU is applied to hidden layers; the
+softmax cross-entropy function takes the final raw scores. For prediction,
+`argmax(scores)` selects the class with the largest score.
+
+### Why use a nonlinear activation?
+
+Without ReLU, two affine layers collapse into one:
+
+```text
+(X @ W1 + b1) @ W2 + b2 = X @ (W1 @ W2) + (b1 @ W2 + b2)
+```
+
+ReLU lets the model express more complicated decision boundaries. The small
+XOR demo illustrates this: the target is class 1 when the two inputs differ.
+It uses inputs encoded as `-1` and `+1`:
+
+| Input | Label |
+| --- | --- |
+| `[-1, -1]` | 0 |
+| `[-1, +1]` | 1 |
+| `[+1, -1]` | 1 |
+| `[+1, +1]` | 0 |
+
+A single straight boundary cannot separate these two classes. The demo
+trains a `2 -> 8 -> 2` MLP on the four points to illustrate fitting this
+pattern. Its accuracy measures these training examples.
+
+### Forward pass, backward pass, and training
+
+`MLP.forward(X)` computes each layer in order and returns `(scores, caches)`.
+`MLP.loss(X, y, reg)` computes the softmax loss and traverses the cached
+layers in reverse to return `(loss, gradients)`. For one hidden layer, the
+backward sequence is:
+
+```text
+loss -> dscores -> output affine -> dhidden -> ReLU -> hidden affine
+                     dW2, db2                           dW1, db1
+```
+
+The loss includes `reg * sum(W**2)` for every weight matrix, so its gradient
+adds `2 * reg * W` at each layer. Biases are unregularized. `MLP.train()`
+then uses the same SGD rule as the optimization section on every parameter:
+
+```python
+loss, gradients = model.loss(X_batch, y_batch, reg=1e-4)
+for name in model.params:
+    model.params[name] -= learning_rate * gradients[name]
+```
+
+The random initialization gives hidden neurons different starting weights.
+ReLU layers use a standard deviation of `sqrt(2 / fan_in)`; the output uses
+`sqrt(1 / fan_in)`. Biases start at zero. These choices follow the scaling
+ideas in the [CS231n initialization notes](https://cs231n.github.io/neural-networks-2/#init).
+
+### Running and experimenting
+
+Run the `Value` neuron, numerical checks for every layer, and XOR:
+
+```bash
+conda activate dl
+python neural_networks.py --skip-cifar
+```
+
+Run those examples followed by CIFAR-10 training:
+
+```bash
+python neural_networks.py
+python neural_networks.py --hidden-dims 64 32
+python neural_networks.py --num-train 5000 --num-iters 500 --learning-rate 0.01
+```
+
+The default CIFAR-10 run uses a reproducible subset of 1,000 training images,
+200 updates, and batches of 128. It prints training and validation accuracy.
+The CLI training options apply to CIFAR-10; the tiny examples keep fixed
+settings. The numerical checks use float64 and tiny arrays, with activations
+away from ReLU's kink at zero.
+
+You can train the class directly:
+
+```python
+from neural_networks import MLP
+from utils import load_cifar10
+
+X_train, y_train, X_val, y_val, _, _ = load_cifar10()
+model = MLP(input_dim=3072, hidden_dims=(64, 32), num_classes=10)
+loss_history = model.train(
+    X_train, y_train, learning_rate=0.05, num_iters=500, batch_size=128,
+)
+print("Parameters:", model.num_parameters)
+print("Validation accuracy:", model.accuracy(X_val, y_val))
+predictions = model.pred(X_val)
+```
+
+`train()` changes the model's parameters and returns the batch loss before
+each update. `num_iters` counts updates, and batches are sampled afresh;
+an update is not a full epoch. `hidden_dims=()` provides the linear softmax
+case for comparison. Use validation accuracy to compare widths, depth,
+learning rates, and regularization. A lower training loss alone does not
+establish better performance on new images; larger models can overfit.
